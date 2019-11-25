@@ -3,36 +3,87 @@ param (
     [Parameter()]
     [switch]$install = $false,
     [string]$basePath = "C:\Node",
-    [string[]]$v = @("8.16.2"),
+    [string[]]$v = @("8.16.2", "10.17.0", "12.13.1"),
     $ParameterName
 )
 
-$start_time = Get-Date
+if (!(Test-Path -Path $basePath)) {
+    New-Item -ItemType Directory -Path $basePath -Force
+}
 
 if ($install) {
+    Add-Type -assembly "System.IO.Compression.Filesystem";
+
     foreach ($version in $v) {
         $folderName = "node-v$version-win-x64"
         $fileName = "$folderName.zip"
         $url = "https://nodejs.org/download/release/v$version/$fileName"
         $outputFile = "$basePath\$fileName"
-        Invoke-WebRequest -Uri $url -OutFile $outputFile
-        # (New-Object System.Net.WebClient).DownloadFile($url, $outputFile)
+        $envName = "NODE_${version}"
+        $envValue = "$basePath\$folderName"
 
-        # https://nodejs.org/en/download/releases/
-        # https://blog.jourdant.me/post/3-ways-to-download-files-with-powershell
-        # https://stackoverflow.com/questions/41895772/powershell-script-to-download-a-zip-file-and-unzip-it
-        # https://gallery.technet.microsoft.com/scriptcenter/a6b10a18-c4e4-46cc-b710-4bd7fa606f95
-        # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_arrays?view=powershell-6
-        # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/invoke-webrequest?view=powershell-6
+        if (Test-Path -Path $outputFile) {
+            Remove-Item -Path $outputFile -Recurse
+        }
 
-        Expand-Archive $outputFile -DestinationPath $basePath -Force
+        if (Test-Path -Path $envValue) {
+            Remove-Item -Path $envValue -Recurse
+        }
+
+        # Invoke-WebRequest -Uri $url -OutFile $outputFile
+        (New-Object System.Net.WebClient).DownloadFile($url, $outputFile)
+        # Expand-Archive $outputFile -DestinationPath $basePath -Force
+        [IO.Compression.Zipfile]::ExtractToDirectory($outputFile, $basePath);
+
         Remove-Item $outputFile
 
-        Write-Output $url
+        # Copy-Item .\nodejs-switcher.ps1 -Destination $envValue
+
+        [System.Environment]::SetEnvironmentVariable($envName, $envValue, [System.EnvironmentVariableTarget]::User);
+        [System.Environment]::SetEnvironmentVariable("NODE_HOME", "%$envName%", [System.EnvironmentVariableTarget]::User);
+
+        Write-Host $url
     }
 }
 else {
-    Write-Output $install
+    $nodeHome = [System.Environment]::GetEnvironmentVariable("NODE_HOME", [System.EnvironmentVariableTarget]::User);
+    $userVariables = [System.Environment]::GetEnvironmentVariables([System.EnvironmentVariableTarget]::User);
+    $nodeVariables = @();
+
+    $i = 0;
+    foreach ($key in $userVariables.Keys) {
+        if ($key -cmatch "^NODE_\d{1,2}\.\d{1,2}\.\d{1,2}$") {
+            $nodeVariables += $key;
+            $i++;
+        }
+    }
+
+    if ($i -gt 0) {
+        Write-Host "Active version of Node.js: $nodeHome"
+        Write-Host "Select you Node.js:"
+
+        $i = 0;
+        foreach ($key in $nodeVariables) {
+            Write-Host "$i - $key"
+            $i++;
+        }
+
+        $selection = Read-Host "Please make a selection"
+
+        if ($selection -le ($nodeVariables.Count - 1)) {
+            $newNodeHome = $nodeVariables[$selection]
+            [System.Environment]::SetEnvironmentVariable("NODE_HOME", "%$newNodeHome%", [System.EnvironmentVariableTarget]::User);
+        }
+
+        Write-Host "Exiting..."
+    }
+    else {
+        Write-Host "You have no version of Node.js installed."
+    }
 }
 
-Write-Output "Time taken: $((Get-Date).Subtract($start_time).Seconds) second(s)"
+$pathVariable = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User);
+
+if (!($pathVariable.Contains("%NODE_HOME%"))) {
+    [System.Environment]::SetEnvironmentVariable("Path", "$pathVariable%NODE_HOME%;", [System.EnvironmentVariableTarget]::User);
+}
