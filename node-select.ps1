@@ -37,10 +37,13 @@ if ($install) {
 
         Remove-Item $outputFile
 
-        # Copy-Item .\nodejs-switcher.ps1 -Destination $envValue
+        Copy-Item .\node-select.ps1 -Destination $envValue
 
-        [System.Environment]::SetEnvironmentVariable($envName, $envValue, [System.EnvironmentVariableTarget]::User);
-        [System.Environment]::SetEnvironmentVariable("NODE_HOME", "%$envName%", [System.EnvironmentVariableTarget]::User);
+        New-ItemProperty -Path "HKCU:\Environment" -Name $envName -PropertyType String -Value $envValue -Force
+        New-ItemProperty -Path "HKCU:\Environment" -Name "NODE_HOME" -PropertyType ExpandString -Value "%$envName%" -Force
+
+        # [System.Environment]::SetEnvironmentVariable($envName, $envValue, [System.EnvironmentVariableTarget]::User);
+        # [System.Environment]::SetEnvironmentVariable("NODE_HOME", "%$envName%", [System.EnvironmentVariableTarget]::User);
 
         Write-Host $url
     }
@@ -72,6 +75,7 @@ else {
 
         if ($selection -le ($nodeVariables.Count - 1)) {
             $newNodeHome = $nodeVariables[$selection]
+            New-ItemProperty -Path "HKCU:\Environment" -Name "NODE_HOME" -PropertyType ExpandString -Value "%$newNodeHome%" -Force
             [System.Environment]::SetEnvironmentVariable("NODE_HOME", "%$newNodeHome%", [System.EnvironmentVariableTarget]::User);
         }
 
@@ -85,5 +89,6 @@ else {
 $pathVariable = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User);
 
 if (!($pathVariable.Contains("%NODE_HOME%"))) {
-    [System.Environment]::SetEnvironmentVariable("Path", "$pathVariable%NODE_HOME%;", [System.EnvironmentVariableTarget]::User);
+    New-ItemProperty -Path "HKCU:\Environment" -Name "Path" -PropertyType ExpandString -Value "%NODE_HOME%;$pathVariable$null" -Force
+    # [System.Environment]::SetEnvironmentVariable("Path", "%NODE_HOME%;$pathVariable", [System.EnvironmentVariableTarget]::User);
 }
